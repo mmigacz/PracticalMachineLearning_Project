@@ -1,0 +1,86 @@
+---
+title: "Barbell Lifts Analysis"
+output: html_document
+---
+
+#Synopsis
+The goal of this project is to build a model with data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did an exercise - barbell lifts.
+The model should should predict "classe" variable with any other variables.
+
+#Preparing data and dependencies
+Initial preparations - loading required packages, loading data.
+
+```{r}
+suppressMessages(library(caret))
+
+# Load data
+srcTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+if(!file.exists("pml-training.csv")){
+  download.file(srcTrain, destfile = "pml-training.csv", method = "curl", mode="wb")
+}
+
+srcTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if(!file.exists("pml-testing.csv")){
+  download.file(srcTest, destfile = "pml-testing.csv", method = "curl", mode="wb")
+}
+pml.training <- read.csv("pml-training.csv")
+pml.testing <- read.csv("pml-testing.csv")
+```
+
+##Subseting and cleaning data
+Some variables are for statistical purpose only. Because they are derived from the others (also correlated), than can be removed to simplify building prediction model.
+
+```{r}
+remove_cols_reqex <- "^(kurtosis|skewness|min|max|stddev|total|var|avg|ampl|num_window|cvtd_timestamp|X|new_window)"
+pml.training <- pml.training[,grep(remove_cols_reqex, names(pml.training),invert=T)]
+```
+
+Split training data into training and validation subsets
+```{r}
+sub <- createDataPartition(y=pml.training$classe, p=.7, list=F) 
+training <- pml.training[sub,]
+validation <- pml.training[-sub,]
+```
+
+##Machine learning
+
+Cross-validation with 3 fold, and allow running for paralell for shorten time
+```{r}
+ctrl <- trainControl(method="cv",number=3,allowParallel=T)
+```
+
+User random forest to build a model.
+```{r cache=TRUE}
+modelRF <- train(classe~., data=training, method="rf", trControl=ctrl, allowParalell=T)
+modelRF
+```
+
+Build confusion matrix for validation data
+```{r}
+confusionMatrix(predict(modelRF,validation),validation$classe)
+```
+
+The random forest accuracy on training set is 99.75% on the validation set. It suggests, that the out-of-sample error could be small.
+
+##Test
+Predict results on test data
+
+```{r}
+pml.testing.predicted = predict(modelRF,pml.testing)
+pml.testing.predicted
+```
+
+```{r echo=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pml.testing.predicted)
+```
+
+
+
